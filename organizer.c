@@ -147,8 +147,18 @@ static Judge* init_judges(int judge_num)
 		if (pid == 0) { // child
 			close(fds_w[1]);
 			close(fds_r[0]);
-			dup2(fds_w[0], 3); // child's read
-			dup2(fds_r[1], 4); // child's write
+
+			// dup stdin & stdout to a far-away fd
+			// (fd 3 4 5 6 are occupied by fds_w and fds_r)
+			dup2(0, 111);
+			dup2(1, 112);
+
+			dup2(fds_w[0], 0); // child's read
+			dup2(fds_r[1], 1); // child's write
+
+			// dup stdin & stdout back to 3 & 4
+			dup2(111, 3);
+			dup2(112, 4);
 
 			memset(id_buf, 0, sizeof(id_buf));
 			sprintf(id_buf, "%d", i + 1);

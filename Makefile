@@ -10,6 +10,8 @@ endif
 
 all: $(EXECS)
 
+
+
 organizer: organizer.o
 	$(CC) -o $@ $<
 judge: judge.o

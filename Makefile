@@ -1,8 +1,8 @@
 DEBUG = 1
 CC = gcc
-CFLAGS = -std=gnu99
-OBJS = organizer.o judge.o
-EXECS = organizer judge
+CFLAGS = -std=gnu99 -Wall
+OBJS = organizer.o judge.o player.o
+EXECS = organizer judge player
 
 ifdef DEBUG
 	CFLAGS += -g -DDEBUG
@@ -15,6 +15,8 @@ all: $(EXECS)
 organizer: organizer.o
 	$(CC) -o $@ $<
 judge: judge.o
+	$(CC) -o $@ $<
+player: player.o
 	$(CC) -o $@ $<
 
 organizer.o: organizer.c

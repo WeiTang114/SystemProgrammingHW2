@@ -4,17 +4,17 @@
 #include <string.h>
 #include <limits.h>
 
-#define STDIN 3
-#define STDOUT 4
+#define STDIN 0
+#define STDOUT 1
+#define ORI_STDIN 3
+#define ORI_STDOUT 4
 
 #ifdef DEBUG
-    #define DP(format, args...) dprintf(STDOUT, "[%s:%d] "format, __FILE__, __LINE__, ##args)
+    #define DP(format, args...) dprintf(ORI_STDOUT, "[%s:%d] "format, __FILE__, __LINE__, ##args)
 #else
     #define DP(args...)
 #endif
 
-#define PIPE_R 0
-#define PIPE_W 1
 
 
 const char PL_IDXES[4] = {'A', 'B', 'C', 'D'};
@@ -86,20 +86,22 @@ int main(int argc, char** argv)
 	memset(judge_yo, 0, sizeof(judge_yo));
 	sprintf(judge_yo, "Judge:%s", argv[1]);
 	DP("%s\n", judge_yo);
+	fflush(stdout);
 
 	char buf[512];
 	int player_ids[4];
 	Player players[4];
 
 	while (1) {
-		read(PIPE_R, buf, sizeof(buf));
+		fflush(stdout);
+		memset(buf, 0, sizeof(buf));
+		read(STDIN, buf, sizeof(buf));
 		DP("%s: read:%s,", judge_yo, buf);
 
 		if (strncmp(buf, "0 0 0 0", strlen("0 0 0 0")) == 0) {
 			DP("%s: get byebye\n", judge_yo);
 			break;
 		}
-
 
 		if (parse_player_ids(buf, player_ids) != 0) {
 			DP("Error: parse_player_ids failed\n");
@@ -108,12 +110,9 @@ int main(int argc, char** argv)
 
 		init_players(players, player_ids);
 
-
 		char* token = strtok(buf, " ");
 		DP("token = \"%s\"\n", token);
-
-		//write(PIPE_W, token, strlen(token) + 1);
-		dprintf(1, "%s", token);
+		printf("%s", token);
 	}
 	return 0;
 }

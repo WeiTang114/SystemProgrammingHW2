@@ -75,10 +75,11 @@ int main(int argc, char* argv[])
 	*/
 
 	start_game(g_games, g_game_num, g_judges, g_judge_num, g_players, g_player_num);
+	
+	DP("after start_game\n");
 	print_result(g_players, g_player_num);
 
 
-	int status;
 	wait_judges(g_judges, g_judge_num);
 	free(g_games);
 	free(g_judges);
@@ -350,8 +351,10 @@ static void start_game(Game* games, int game_num, Judge* judges, int judge_num, 
 					printf("read eof\n");
 				}
 				else {
+					DP("Organizer get from pipe:%s\n", buf);
+
 					loser = atoi(buf);
-					printf("game ok: judge:%d, loser:%d\n", judge->id, loser);
+					DP("game ok: judge:%d, loser:%d\n", judge->id, loser);
 					players[loser - 1].score --;
 					judge->busy = 0;
 					judge->game->state = PLAYED;

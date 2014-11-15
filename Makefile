@@ -1,7 +1,7 @@
 DEBUG = 1
 CC = gcc
-CFLAGS = -std=gnu99 -Wall
-OBJS = organizer.o judge.o player.o
+CFLAGS = -std=gnu99 -Wall -I./
+OBJS = organizer.o judge.o player.o utils.o
 EXECS = organizer judge player
 
 ifdef DEBUG
@@ -10,15 +10,12 @@ endif
 
 all: $(EXECS)
 
-
-
 organizer: organizer.o
 	$(CC) -o $@ $<
-judge: judge.o
-	$(CC) -o $@ $<
+judge: judge.o utils.o
+	$(CC) -o $@ $< utils.o
 player: player.o
 	$(CC) -o $@ $<
-
 organizer.o: organizer.c
 	$(CC) -c $< $(CFLAGS)
 

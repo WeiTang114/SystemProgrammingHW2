@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <fcntl.h>
+#include <utils.h>
 
 #define STDIN 0
 #define STDOUT 1
@@ -83,7 +84,7 @@ int create_fifos(char* judge_id)
 	return 0;
 }
 
-void clean_fifos(char* judge_id) {
+void clear_fifos(char* judge_id) {
 	char fifojudge[32] = {};
 	char fifoplayer[32] = {};
 
@@ -199,8 +200,62 @@ void deal_cards(Player* players)
 	// send
 	for (int m = 0; m < 4; m++) {
 		write(players[m].fifo_w, cards_buf[m], sizeof(cards_buf[m]));
+		players[m].card_num = index[m][1] - index[m][0] + 1;
+	}
+
+}
+
+
+int get_first_has_card(Player* players, int start)
+{
+	int cnt = 0;
+	int pos = start;
+	int index = -1;
+	while (cnt < 4) {
+		if (players[pos].card_num > 0) {
+			index = pos;
+			break;
+		}
+		pos = (pos + 1) % 4;
+		cnt ++;
+	}
+	return index;
+}
+
+int get_next_players(Player* players, int* next_player_idxes)
+{
+	int* pl = next_player_idxes;
+	int second = -1;
+	if (pl[0] == -1 && pl[1] == -1) {
+		pl[0] = get_first_has_card(players, 0);
+	}
+	else {
+		pl[0] = get_first_has_card(players, (pl[0] + 1) % 4);
+	}
+	second = get_first_has_card(players, (pl[0] + 1) % 4);
+	if (second != pl[0]) {
+		pl[1] = second;
+		return 2;
+	}
+	else {
+		pl[1] = -1;
+		return 1;
 	}
 }
+
+
+int check_message(Player* pl, char** msg_tokens) {
+	if (pl->idx != msg_tokens[0][0]) {
+		DP("ERROR: receive message from wrong player:%s\n", msg_tokens[0]);
+		return 0;
+	}
+	if (pl->rand_key != atoi(msg_tokens[1])) {
+		DP("CHEATING!\n");
+		return 0;
+	}
+	return 1;
+}
+
 
 /**
  * [run_game description]
@@ -211,16 +266,14 @@ void deal_cards(Player* players)
 int run_game(char* judge_id, Player* players)
 {
 	int loser_id = players[0].id;
-
 	int fifo_j = 0;
-
 	char fifojudge[32] = {};
 	char fifoplayer[32] = {};
 
+	DP("run_game() called\n");
+
 	sprintf(fifojudge, "./judge%s.FIFO", judge_id);
-	DP("aaa\n");
 	fifo_j = open(fifojudge, O_RDONLY);
-	DP("bbb\n");
 	for (int i = 0; i < 4; i++) {
 		memset(fifoplayer, 0, sizeof(fifoplayer));
 		sprintf(fifoplayer, "./judge%s_%c.FIFO", judge_id, PL_IDXES[i]);
@@ -229,6 +282,64 @@ int run_game(char* judge_id, Player* players)
 
 	deal_cards(players);
 
+	int curr_pl[2] = {-1, -1};  // player index(0~3), the first is to get, and the second is to give
+	char bufw[64] = {};
+	char bufr[64] = {};
+	char** tokens = NULL;
+	while (1) {
+		int num = get_next_players(players, curr_pl);
+		DP("%d. %d\n", curr_pl[0], curr_pl[1]);
+		if (num == 1) {
+			loser_id = players[curr_pl[0]].id;
+			DP("break run_game loop\n");
+			break;
+		}
+
+		Player* pl0 = &players[curr_pl[0]];
+		Player* pl1 = &players[curr_pl[1]];
+
+		// 1. j -> A : number of B           < 13
+		memset(bufw, 0, sizeof(bufw));
+		sprintf(bufw, "< %d", pl1->card_num);
+		write(pl0->fifo_w, bufw, sizeof(bufw));
+
+		// 2. j <- A : card id to get        A 65535 6
+		memset(bufr, 0, sizeof(bufr));		
+		do {
+			read(fifo_j, bufr, sizeof(bufr));
+			tokens = get_tokens(bufr);
+		} while (!check_message(pl0, tokens));
+
+		// 3. j -> B : card id to get        > 6
+		memset(bufw, 0, sizeof(bufw));
+		sprintf(bufw, "> %s", tokens[2]);
+		write(pl1->fifo_w, bufw, sizeof(bufw));
+
+		// 4. B -> j : the card of the id    B 65534 11
+		memset(bufr, 0, sizeof(bufr));		
+		do {
+			read(fifo_j, bufr, sizeof(bufr));
+			tokens = get_tokens(bufr);
+		} while (!check_message(pl1, tokens));
+		pl1->card_num --;
+
+		// 5. j -> A : the card of the id    11
+		memset(bufw, 0, sizeof(bufw));
+		sprintf(bufw, "%s", tokens[2]);
+		write(pl0->fifo_w, bufw, sizeof(bufw));
+		pl0->card_num ++;
+
+		// 6. A -> j : whether eliminated    A 65535 1
+		memset(bufr, 0, sizeof(bufr));		
+		do {
+			read(fifo_j, bufr, sizeof(bufr));
+			tokens = get_tokens(bufr);
+		} while (!check_message(pl0, tokens));
+		int elim = atoi(tokens[2]);
+		if (elim) {
+			pl0->card_num -= 2;
+		}
+	}
 
 	return loser_id;
 }
@@ -284,5 +395,6 @@ int main(int argc, char** argv)
 	for (int i = 0; i < 4; i++) {
 		waitpid(players[i].pid, &status, 0);
 	}
+	clear_fifos(judge_id);
 	return 0;
 }

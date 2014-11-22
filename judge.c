@@ -22,6 +22,13 @@
 #endif
 
 
+#define my_write(fd, format, args...)        \
+    do {                                                \
+        char msg[64] = {};                              \
+        sprintf(msg, format, ##args);                   \
+        write(fd, msg, sizeof(msg));                    \
+    } while(0)
+
 
 const char PL_IDXES[4] = {'A', 'B', 'C', 'D'};
 
@@ -207,7 +214,7 @@ void deal_cards(Player* players)
         for (int cd = index[k][0]; cd <= index[k][1]; cd++) {
             sprintf(cards_buf[k], "%s%d ", cards_buf[k], cards[cd]);
         }
-        cards_buf[k][strlen(cards_buf[k]) - 1] = '\0';
+        cards_buf[k][strlen(cards_buf[k]) - 1] = '\n';
     }
 
     // send
@@ -271,6 +278,19 @@ int check_message(Player* pl, char** msg_tokens) {
 }
 
 
+char** my_read_from_player(int fd, Player* pl, char* buf, unsigned buflen)
+{ 
+    char** tokens;
+    do {
+        memset(buf, 0, buflen);
+        read(fd, buf, buflen);
+        tokens = get_tokens(buf);
+    } while (!check_message(pl, tokens));
+    return tokens;
+}
+
+
+
 /**
  * [run_game description]
  * @param  judge_id
@@ -298,7 +318,6 @@ int run_game(char* judge_id, Player* players)
 
 
     int curr_pl[2] = {-1, -1};  // player index(0~3), the first is to get, and the second is to give
-    char bufw[64] = {};
     char bufr[64] = {};
     char** tokens = NULL;
 
@@ -326,44 +345,27 @@ int run_game(char* judge_id, Player* players)
 
         Player* pl0 = &players[curr_pl[0]];
         Player* pl1 = &players[curr_pl[1]];
+        DP("This turn: %c gets from %c (%d cards)\n", pl0->idx, pl1->idx, pl1->card_num);
 
         // 1. j -> A : number of B           < 13
-        memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "< %d\n", pl1->card_num);
-        write(pl0->fifo_w, bufw, sizeof(bufw));
+        my_write(pl0->fifo_w, "< %d\n", pl1->card_num);
 
         // 2. j <- A : card id to get        A 65535 6
-        memset(bufr, 0, sizeof(bufr));      
-        do {
-            read(fifo_j, bufr, sizeof(bufr));
-            tokens = get_tokens(bufr);
-        } while (!check_message(pl0, tokens));
+        my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
 
         // 3. j -> B : card id to get        > 6
-        memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "> %s\n", tokens[2]);
-        write(pl1->fifo_w, bufw, sizeof(bufw));
+        my_write(pl1->fifo_w, "> %s\n", tokens[2]);
 
         // 4. B -> j : the card of the id    B 65534 11
-        memset(bufr, 0, sizeof(bufr));      
-        do {
-            read(fifo_j, bufr, sizeof(bufr));
-            tokens = get_tokens(bufr);
-        } while (!check_message(pl1, tokens));
+        my_read_from_player(fifo_j, pl1, bufr, sizeof(bufr));
         pl1->card_num --;
 
         // 5. j -> A : the card of the id    11
-        memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "%s\n", tokens[2]);
-        write(pl0->fifo_w, bufw, sizeof(bufw));
+        my_write(pl0->fifo_w, "%s\n", tokens[2]);
         pl0->card_num ++;
 
         // 6. A -> j : whether eliminated    A 65535 1
-        memset(bufr, 0, sizeof(bufr));      
-        do {
-            read(fifo_j, bufr, sizeof(bufr));
-            tokens = get_tokens(bufr);
-        } while (!check_message(pl0, tokens));
+        my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
         int elim = atoi(tokens[2]);
         if (elim) {
             pl0->card_num -= 2;

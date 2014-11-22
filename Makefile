@@ -17,8 +17,9 @@ judge: judge.o utils.o
 player: player.o utils.o
 	$(CC) -o $@ $< utils.o
 organizer.o: organizer.c
-	$(CC) -c $< $(CFLAGS) -DDEBUG
-
+	$(CC) -c $< $(CFLAGS)
+judge.o: judge.c
+	$(CC) -c $< $(CFLAGS)
 %.o: %.c
 	$(CC) -c $< $(CFLAGS)
 

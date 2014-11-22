@@ -8,6 +8,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <utils.h>
+#include <sys/time.h>
 
 #define STDIN 0
 #define STDOUT 1
@@ -116,7 +117,6 @@ void init_players(char* judge_id, Player* players, int* player_ids)
     }
 
     for (int i = 0; i < 4; i++) {
-        DP("fofofofo\n");
         p = &players[i];
         p->id = player_ids[i];
         p->idx = PL_IDXES[i];
@@ -161,6 +161,10 @@ Player* get_player_by_idx(Player* players, char idx)
 
 void shuffle(int *array, size_t n)
 {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    srand(tv.tv_usec);
+    
     if (n > 1) 
     {
         size_t i;
@@ -313,7 +317,7 @@ int run_game(char* judge_id, Player* players)
 
     while (1) {
         int num = get_next_players(players, curr_pl);
-        DP("%d. %d\n", curr_pl[0], curr_pl[1]);
+        //DP("%d. %d\n", curr_pl[0], curr_pl[1]);
         if (num == 1) {
             loser_id = players[curr_pl[0]].id;
             DP("break run_game loop\n");
@@ -325,7 +329,7 @@ int run_game(char* judge_id, Player* players)
 
         // 1. j -> A : number of B           < 13
         memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "< %d", pl1->card_num);
+        sprintf(bufw, "< %d\n", pl1->card_num);
         write(pl0->fifo_w, bufw, sizeof(bufw));
 
         // 2. j <- A : card id to get        A 65535 6
@@ -337,7 +341,7 @@ int run_game(char* judge_id, Player* players)
 
         // 3. j -> B : card id to get        > 6
         memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "> %s", tokens[2]);
+        sprintf(bufw, "> %s\n", tokens[2]);
         write(pl1->fifo_w, bufw, sizeof(bufw));
 
         // 4. B -> j : the card of the id    B 65534 11
@@ -350,7 +354,7 @@ int run_game(char* judge_id, Player* players)
 
         // 5. j -> A : the card of the id    11
         memset(bufw, 0, sizeof(bufw));
-        sprintf(bufw, "%s", tokens[2]);
+        sprintf(bufw, "%s\n", tokens[2]);
         write(pl0->fifo_w, bufw, sizeof(bufw));
         pl0->card_num ++;
 
@@ -412,18 +416,16 @@ int main(int argc, char** argv)
         loser_id = run_game(judge_id, players);
 
         DP("loser = %d\n", loser_id);
-        printf("%d", loser_id);
+        printf("%d\n", loser_id);
         fflush(stdout);
 
         int status;
         for (int i = 0; i < 4; i++) {
-            DP("1");
             kill(players[i].pid, SIGKILL);
-            DP("2");
             waitpid(players[i].pid, &status, 0);
         }
+        clear_fifos(judge_id);
     }
 
-    clear_fifos(judge_id);
     return 0;
 }

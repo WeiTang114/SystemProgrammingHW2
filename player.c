@@ -5,6 +5,7 @@
 #include <string.h>
 #include "utils.h"
 #include <time.h>
+#include <sys/time.h>
 
 #ifdef DEBUG
     #define DP(format, args...) printf("[%s:%d] "format, __FILE__, __LINE__, ##args)
@@ -13,7 +14,7 @@
     //#define printf(args...)
     //#define dprintf(args...)
 #endif
-#define printf(format, args...)
+//#define printf(format, args...)
 
 #define my_write(playeridx, fd, format, args...)        \
     do {                                                \
@@ -78,7 +79,7 @@ int remove_card(Cards* cards, int idx)
         cards->c[i] = cards->c[i + 1];
     }
     cards->num --;
-    printf("remove_card: idx %d , value = %d\n", idx, val);
+    DP("remove_card: idx %d , value = %d\n", idx, val);
     return val;
 }
 
@@ -98,7 +99,9 @@ Cards* init_cards(char playeridx, char* cardsmsg)
         token = strtok(NULL, " ");
     }
     cards->num = num;
+#ifdef DEBUG
     print_cards(playeridx, cards);
+#endif
 
     for (int idx = 1; idx <= cards->num; idx++) {
         int val = cards->c[idx - 1];
@@ -110,7 +113,9 @@ Cards* init_cards(char playeridx, char* cardsmsg)
         }
     }
 
+#ifdef DEBUG
     print_cards(playeridx, cards);
+#endif
     free(msg);
     return cards;
 }
@@ -132,7 +137,7 @@ int add_card(Cards* cards, int value)
 
     cards->c[cards->num] = value;
     cards->num ++;
-    printf("add cards: value = %d\n", value);
+    DP("add cards: value = %d\n", value);
     return 0;
 }
 
@@ -143,8 +148,7 @@ int main(int argv, char** argc)
         return -1;
     }
 
-    printf("Player %s created.\n", argc[2]);
-    fflush(stdout);
+    DP("Player %s created.\n", argc[2]);
 
     char fifo_r_path[64];
     char fifo_w_path[64];
@@ -162,11 +166,13 @@ int main(int argv, char** argc)
     sprintf(fifo_r_path, "./judge%s_%c.FIFO", argc[1], playeridx);
     int fifo_w = open(fifo_w_path, O_WRONLY);
     int fifo_r = open(fifo_r_path, O_RDONLY);
-    srand(time(NULL));
+    
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    srand(tv.tv_usec);
 
     my_read((char) playeridx, fifo_r, buf, sizeof(buf));
     cards = init_cards(playeridx, buf);
-    print_cards(playeridx, cards);
     my_write((char) playeridx, fifo_w, "%c %d %d\n", (char) playeridx, rand_key, cards->num);
     while (1) {
         my_read(playeridx, fifo_r, buf, sizeof(buf));
@@ -176,14 +182,16 @@ int main(int argv, char** argc)
             // 1. j -> A : number of B           < 13
             int n_card_nextp = atoi(tokens[1]);
             int get_idx = (rand() % n_card_nextp) + 1;
-            printf("Player %c wants to get %d from %d\n", playeridx, get_idx, n_card_nextp);
+            DP("Player %c wants to get %d from %d\n", playeridx, get_idx, n_card_nextp);
             msg_value = get_idx;
         }
         else if (strcmp(tokens[0], ">") == 0) {
             // 3. j -> B : card id to get        > 6
             int got_idx = atoi(tokens[1]);
             int value = remove_card(cards, got_idx);
+        #ifdef DEBUG
             print_cards(playeridx, cards);
+        #endif
             msg_value = value;
         }
         else {
@@ -191,7 +199,9 @@ int main(int argv, char** argc)
             int got_val = atoi(tokens[0]);
             int elim = add_card(cards, got_val);
             msg_value = elim;
+        #ifdef DEBUG
             print_cards(playeridx, cards);
+        #endif
         }
         my_write((char) playeridx, fifo_w, "%c %d %d\n", playeridx, rand_key, msg_value);
     }

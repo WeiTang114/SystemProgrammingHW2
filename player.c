@@ -164,8 +164,8 @@ int main(int argv, char** argc)
 
     sprintf(fifo_w_path, "./judge%s.FIFO", argc[1]);
     sprintf(fifo_r_path, "./judge%s_%c.FIFO", argc[1], playeridx);
-    int fifo_w = open(fifo_w_path, O_WRONLY);
-    int fifo_r = open(fifo_r_path, O_RDONLY);
+    int fifo_w = open(fifo_w_path, O_RDWR);
+    int fifo_r = open(fifo_r_path, O_RDWR);
     
     struct timeval tv;
     gettimeofday(&tv,NULL);

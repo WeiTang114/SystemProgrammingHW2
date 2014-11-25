@@ -307,11 +307,11 @@ int run_game(char* judge_id, Player* players)
     DP("run_game() called\n");
 
     sprintf(fifojudge, "./judge%s.FIFO", judge_id);
-    fifo_j = open(fifojudge, O_RDONLY);
+    fifo_j = open(fifojudge, O_RDWR);
     for (int i = 0; i < 4; i++) {
         memset(fifoplayer, 0, sizeof(fifoplayer));
         sprintf(fifoplayer, "./judge%s_%c.FIFO", judge_id, PL_IDXES[i]);
-        players[i].fifo_w = open(fifoplayer, O_WRONLY);
+        players[i].fifo_w = open(fifoplayer, O_RDWR);
     }
 
     deal_cards(players);

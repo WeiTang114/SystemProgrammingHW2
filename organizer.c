@@ -298,7 +298,7 @@ static void start_game(Game* games, int game_num, Judge* judges, int judge_num, 
 				DP("players:%s\n", buf);
 				buf[strlen(buf) - 1] = '\0';
 
-				write(judge->fd_write, buf, sizeof(buf));
+				write(judge->fd_write, buf, strlen(buf));
 			}
 			else { 
 				if (all_games_played(games, game_num)) {
@@ -310,9 +310,9 @@ static void start_game(Game* games, int game_num, Judge* judges, int judge_num, 
 
 		if (all_played) {
 			DP("All Game Played!\n");					
-			char* bye = "0 0 0 0";
+			char* bye = "0 0 0 0\n";
 			for (int kk = 0; kk < judge_num; kk++) {
-				write(judges[kk].fd_write, bye, strlen(bye) + 1);
+				write(judges[kk].fd_write, bye, strlen(bye));
 			}
 			break;
 		}

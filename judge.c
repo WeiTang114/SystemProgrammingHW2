@@ -26,7 +26,7 @@
     do {                                                \
         char msg[64] = {};                              \
         sprintf(msg, format, ##args);                   \
-        write(fd, msg, sizeof(msg));                    \
+        write(fd, msg, strlen(msg));                    \
     } while(0)
 
 
@@ -185,13 +185,28 @@ void shuffle(int *array, size_t n)
     }
 }
 
-void deal_cards(Player* players)
+int check_message(Player* pl, char** msg_tokens) {
+    if (pl->idx != msg_tokens[0][0]) {
+        DP("ERROR: receive message from wrong player:%s\n", msg_tokens[0]);
+        sleep(3);
+        return 0;
+    }
+    if (pl->rand_key != atoi(msg_tokens[1])) {
+        DP("CHEATING!\n");
+        return 0;
+    }
+    return 1;
+}
+
+void deal_cards(Player* players, int fifo_read)
 {
     int indexarr[53];
     int cards_tmp[53];
     int cards[53];
     char cards_buf[4][64] = {{}, {}, {}, {}};
     int index[4][2] = {{0, 13}, {14, 26}, {27, 39}, {40, 52}};
+    char bufr[64] = {};
+    char** tokens;
 
     DP("deal\n");
 
@@ -219,8 +234,15 @@ void deal_cards(Player* players)
 
     // send
     for (int m = 0; m < 4; m++) {
-        write(players[m].fifo_w, cards_buf[m], sizeof(cards_buf[m]));
-        players[m].card_num = index[m][1] - index[m][0] + 1;
+        write(players[m].fifo_w, cards_buf[m], strlen(cards_buf[m]));
+
+        memset(bufr, 0, sizeof(bufr));
+        read(fifo_read, bufr, sizeof(bufr));
+        tokens = get_tokens(bufr);
+        if (!check_message(&players[m], tokens)) {
+            DP("Init Cheat\n");
+        }
+        players[m].card_num = atoi(tokens[2]);
     }
 
 }
@@ -264,19 +286,6 @@ int get_next_players(Player* players, int* next_player_idxes)
 }
 
 
-int check_message(Player* pl, char** msg_tokens) {
-    if (pl->idx != msg_tokens[0][0]) {
-        DP("ERROR: receive message from wrong player:%s\n", msg_tokens[0]);
-        sleep(3);
-        return 0;
-    }
-    if (pl->rand_key != atoi(msg_tokens[1])) {
-        DP("CHEATING!\n");
-        return 0;
-    }
-    return 1;
-}
-
 
 char** my_read_from_player(int fd, Player* pl, char* buf, unsigned buflen)
 { 
@@ -285,6 +294,7 @@ char** my_read_from_player(int fd, Player* pl, char* buf, unsigned buflen)
         memset(buf, 0, buflen);
         read(fd, buf, buflen);
         tokens = get_tokens(buf);
+        //DP("get from player %c:\"%s\"\n", pl->idx, buf);
     } while (!check_message(pl, tokens));
     return tokens;
 }
@@ -314,25 +324,11 @@ int run_game(char* judge_id, Player* players)
         players[i].fifo_w = open(fifoplayer, O_RDWR);
     }
 
-    deal_cards(players);
-
-
+    deal_cards(players, fifo_j);
+    
     int curr_pl[2] = {-1, -1};  // player index(0~3), the first is to get, and the second is to give
     char bufr[64] = {};
     char** tokens = NULL;
-
-
-    for (int j = 0; j < 4; j++) {
-        memset(bufr, 0, sizeof(bufr));
-        read(fifo_j, bufr, sizeof(bufr));
-        DP("Judge get %s\n", bufr);
-        tokens = get_tokens(bufr);
-        Player* pl = get_player_by_idx(players, tokens[0][0]);
-        if (!check_message(pl, tokens)) {
-            DP("Init Cheat\n");
-        }
-        pl->card_num = atoi(tokens[2]);
-    }
 
     while (1) {
         int num = get_next_players(players, curr_pl);
@@ -342,22 +338,21 @@ int run_game(char* judge_id, Player* players)
             DP("break run_game loop\n");
             break;
         }
-
         Player* pl0 = &players[curr_pl[0]];
         Player* pl1 = &players[curr_pl[1]];
-        DP("This turn: %c gets from %c (%d cards)\n", pl0->idx, pl1->idx, pl1->card_num);
+        //DP("This turn: %c gets from %c (%d cards)\n", pl0->idx, pl1->idx, pl1->card_num);
 
         // 1. j -> A : number of B           < 13
         my_write(pl0->fifo_w, "< %d\n", pl1->card_num);
 
         // 2. j <- A : card id to get        A 65535 6
-        my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
+        tokens = my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
 
         // 3. j -> B : card id to get        > 6
         my_write(pl1->fifo_w, "> %s\n", tokens[2]);
 
         // 4. B -> j : the card of the id    B 65534 11
-        my_read_from_player(fifo_j, pl1, bufr, sizeof(bufr));
+        tokens = my_read_from_player(fifo_j, pl1, bufr, sizeof(bufr));
         pl1->card_num --;
 
         // 5. j -> A : the card of the id    11
@@ -365,7 +360,7 @@ int run_game(char* judge_id, Player* players)
         pl0->card_num ++;
 
         // 6. A -> j : whether eliminated    A 65535 1
-        my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
+        tokens = my_read_from_player(fifo_j, pl0, bufr, sizeof(bufr));
         int elim = atoi(tokens[2]);
         if (elim) {
             pl0->card_num -= 2;

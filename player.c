@@ -11,8 +11,6 @@
     #define DP(format, args...) printf("[%s:%d] "format, __FILE__, __LINE__, ##args)
 #else
     #define DP(args...)
-    //#define printf(args...)
-    //#define dprintf(args...)
 #endif
 //#define printf(format, args...)
 
@@ -21,7 +19,7 @@
         char msg[64] = {};                              \
         sprintf(msg, format, ##args);                   \
         DP("Player %c write: \"%s\"\n", playeridx, msg);\
-        write(fd, msg, sizeof(msg));                    \
+        write(fd, msg, strlen(msg));                    \
     } while(0)
 
 typedef struct {
